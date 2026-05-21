@@ -31,8 +31,13 @@ export default function App() {
   if (error) {
     return (
       <div className="loading">
-        <p>Couldn’t reach the server.</p>
-        <p className="muted">Make sure it’s running (npm run dev), then refresh.</p>
+        <p>Couldn’t reach the API server.</p>
+        <p className="muted">
+          This app isn’t a static site — it needs its Node server running. Locally run <code>npm run dev</code>;
+          when deployed, run <code>node server/index.js</code> (or <code>npm run preview</code>), which serves the
+          app and <code>/api</code> together on one port. A 404 here means the page loaded but nothing answers
+          <code>/api</code> at this URL — usually the frontend was deployed as static files with no backend.
+        </p>
         <code>{error}</code>
       </div>
     )

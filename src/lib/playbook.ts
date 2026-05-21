@@ -1,8 +1,8 @@
 import { parseKey } from '../dateUtils'
 
-// The sprint's daily routine, encoded. `auto` tasks are completed automatically
-// from data the app already tracks (messages counter / conversations), so they
-// can't be double-counted. Everything else is a manual check.
+// The sprint's daily routine, encoded as the *real* flow (not just task
+// categories). `auto` tasks complete from data the app already tracks (the
+// messages counter / conversations), so they can't be double-counted.
 export type AutoMetric = 'messages' | 'conversations'
 
 export interface PlaybookTask {
@@ -24,56 +24,83 @@ export interface DayPlaybook {
 
 function weekdaySections(dow: number): PlaybookSection[] {
   const morning: PlaybookSection = {
-    name: 'Morning',
-    note: '90 min · ~9:00–10:30',
+    name: 'Morning block',
+    note: '90 min · 12:00–1:30 AM',
     tasks: [
+      {
+        key: 'open_tracker',
+        label: 'Open the tracker (5 min)',
+        detail:
+          'Check three numbers: conversations scheduled this week, active trials, messages awaiting reply. Note which active families need a check-in today (day 3 / 7 / 14).',
+      },
+      {
+        key: 'find_leads',
+        label: 'Find today’s leads (30 min)',
+        detail:
+          'Reddit (r/Parenting, r/Mommit, r/daddit, r/raisingkids, r/parentingteenagers) sorted by New — search “screen time”, “phone limit”, “five more minutes”, “fighting about phone”. Pull 3 hot leads from the last 24h. Same in your FB groups (1–2 more). Scan your warm list for anyone unmessaged (weeks 1–2 priority). Drop them in the Leads tab.',
+      },
       {
         key: 'msg10',
         auto: 'messages',
-        label: 'Send 10 messages',
+        label: 'Send 10 messages (40 min)',
         detail:
-          '3 hot replies (today’s screen-time posts — search “screen time”, “phone limit”, “five more minutes”, sort by newest) · 4 cold posts/DMs · 3 follow-ups (bump day 4, then day 10, then drop)',
+          '3 hot replies to today’s posts (highest conversion — they’re in pain right now) · 4 cold/warm posts or DMs (weeks 1–2 lean warm, weeks 3–6 lean cold) · 3 follow-ups (bump day 4, day 10, then drop)',
       },
       {
         key: 'confirm_interviews',
-        label: 'Confirm today’s interviews',
-        detail: '“Looking forward to our 2pm chat” — cuts no-shows in half',
+        label: 'Confirm today’s interviews (15 min)',
+        detail: '“Looking forward to our chat at [time]” — cuts no-shows in half. Re-read their initial message before the call for context.',
       },
     ],
   }
   const midday: PlaybookSection = {
-    name: 'Midday',
-    note: '2–3 hrs · your scheduled calls',
+    name: 'Midday block',
+    note: '3 hrs · 12:00–3:00 PM',
     tasks: [
+      {
+        key: 'prep_calls',
+        label: 'Prep before each call (5 min)',
+        detail: 'Re-read their initial reply. Have the script visible, but don’t read from it.',
+      },
       {
         key: 'run_conversations',
         auto: 'conversations',
-        label: 'Run your parent conversations',
+        label: 'Run the call (30 min)',
         detail:
-          '30 min each — 2 min frame (“researching, not selling”) · 15 min listen (“walk me through a typical weeknight”) · 8 min reflect · 5 min ask for the 2-week trial',
+          '2 min frame (“researching, not selling”) · 15 min listen (“walk me through a typical weeknight” → failure moment → what they felt → what they tried) · 8 min reflect (“here’s what I’m hearing — does that match?”) · 5 min ask (“want to try it for 2 weeks and tell me what’s broken?”)',
       },
       {
         key: 'call_notes',
-        label: 'Write 10 min of notes after each call',
-        detail: 'Verbatim quotes that surprised you · the failure moment they described · one phrase to steal for marketing',
+        label: 'Notes right after each call (10 min)',
+        detail: 'Verbatim surprising quotes · the failure moment they described · one phrase to steal for marketing · update their pipeline stage.',
+      },
+    ],
+  }
+  const afternoon: PlaybookSection = {
+    name: 'Afternoon admin',
+    note: '30 min · 3:00–3:30 PM',
+    tasks: [
+      {
+        key: 'afternoon_admin',
+        label: 'Afternoon admin (30 min)',
+        detail: 'Schedule any “yes” from today into tomorrow’s onboarding slot · reply to anyone who replied to your morning messages · move pipeline stages.',
       },
     ],
   }
   const evening: PlaybookSection = {
-    name: 'Evening',
-    note: '45 min · ~7:00–7:45',
+    name: 'Evening block',
+    note: '45 min · 7:00–7:45 PM',
     tasks: [
-      { key: 'onboard', label: 'Onboard anyone who said yes today', detail: '20-min setup call' },
+      { key: 'onboard', label: 'Onboard new families', detail: 'Any 20-min setup calls scheduled for tonight.' },
       {
         key: 'trial_checkins',
-        label: 'Check in with active trial families',
-        detail:
-          'Day 3: “any moment you almost overrode?” · Day 7: “what’s working, what isn’t?” · Day 14: schedule the wrap-up (see the follow-up queue on Pipeline)',
+        label: 'Active trial check-ins',
+        detail: 'Day 3 and Day 7 messages to anyone hitting that mark · Day 14: schedule the wrap-up interview. (See the follow-up queue on Pipeline.)',
       },
       {
-        key: 'update_tracker',
-        label: 'Update the tracker + End Day',
-        detail: 'Conversations had, trials started/active, what you learned today',
+        key: 'eod_review',
+        label: 'End-of-day review (10 min)',
+        detail: 'Update tracker totals · one sentence: what surprised me today · one sentence: what I’ll do differently tomorrow. (Use End Day.)',
       },
     ],
   }
@@ -83,22 +110,22 @@ function weekdaySections(dow: number): PlaybookSection[] {
     weekly.tasks.push({
       key: 'weekly_mining',
       label: 'Monday — channel mining (1 hr)',
-      detail: 'Join 5 new Facebook groups · find 3 newsletter writers/podcasters (park for Week 3) · find 2 new subreddits worth posting in',
+      detail: 'Join 5 new Facebook groups · find 3 newsletter writers/podcasters (park for Week 3) · find 2 new subreddits worth posting in.',
     })
   if (dow === 3)
     weekly.tasks.push({
       key: 'weekly_patterns',
       label: 'Wednesday — pattern review (1 hr, with Ashraf if possible)',
-      detail: 'Re-read the last 5 days of notes · recurring phrases to steal · which messages got replies vs ignored · which families churned, and why',
+      detail: 'Re-read the last 5 days of notes · recurring phrases to steal · which messages got replies vs ignored · which families churned, and why.',
     })
   if (dow === 5)
     weekly.tasks.push({
       key: 'weekly_triage',
       label: 'Friday — triage + numbers (1 hr)',
-      detail: 'Week totals: conversations, trials started, trials active · are you on pace? · write 3 sentences on what changed in your understanding this week',
+      detail: 'Week totals: conversations, trials started, trials active · are you on pace? · 3 sentences on what changed in your understanding this week.',
     })
 
-  const sections = [morning, midday, evening]
+  const sections = [morning, midday, afternoon, evening]
   if (weekly.tasks.length) sections.push(weekly)
   return sections
 }

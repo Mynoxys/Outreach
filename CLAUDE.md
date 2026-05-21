@@ -9,24 +9,22 @@ Rulely Tracker — a single-user, local-only web app for running a 6-week custom
 ## Commands
 
 ```
-npm run dev        # Vite dev server (5173) + Express API (3001) together, both auto-reload
-npm run server     # Express API only
-npm run build      # Vite production build → dist/
-npm run preview    # build, then serve everything from Express (prod-like, single port 3001)
-npm run seed       # fill server/data.json with realistic sample data
-npm run reset      # clear server/data.json back to empty
+npm run dev        # Vite dev server on :5173 (talks directly to Supabase)
+npm run build      # static production build → dist/  (needs VITE_SUPABASE_* env)
+npm run preview    # build, then serve the static dist with `vite preview`
 npm run typecheck  # tsc --noEmit
 ```
 
-There is no test runner and no linter — `npm run typecheck` is the only automated check. In dev, Vite proxies `/api/*` to Express on :3001 (vite.config.ts).
+There is no test runner and no linter — `npm run typecheck` is the only automated check. The app needs `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` (see `.env.example`); copy to `.env.local` for dev. Deploy as a **static site** (Vercel/GitHub Pages); run `db/schema.sql` once in the Supabase project. For a GitHub Pages *project* site set `VITE_BASE=/<repo>/` at build time.
 
 ## Architecture
 
-**Single source of truth, replaced wholesale.** The entire application state is one `DB` object: `{ parents, journal, messageCounts, followups }` (shape in src/types.ts and server/db.js).
+**Single source of truth, re-read wholesale.** The entire UI state is one `DB` object: `{ parents, journal, messageCounts, followups }` (shape in src/types.ts).
 
-- The server keeps the DB in memory and persists the *whole thing* to `server/data.json` on every mutation via `mutate()` (atomic write: temp file + rename). There is no database. Whole-DB swaps (clear / load sample / import a backup) go through `replaceDB(next)` instead of `mutate()`.
-- **Every API mutation responds with the full, updated DB.** src/api.ts is built entirely around this: each call resolves to a `DB`, and callers do `setDb(await api.foo(...))`. App.tsx holds the one `db` in state and passes `db` + `setDb` to every component. There is no partial update, optimistic UI, or client cache — state is always a full replacement from the server. When adding an endpoint, follow the contract: mutate via `mutate()` (or `replaceDB()` for whole-DB ops), then `res.json(getDB())`.
-- **Ships empty; primary data entry is in-app CRUD.** `server/data.json` starts as the empty `DEFAULT_DB`. Parents are created/edited/deleted directly in the Pipeline tab (the "Add a parent" form, the row ✎/✕ buttons, and the click-to-advance status badge). The topbar has Load sample / Export backup / Clear all (`POST /api/data/sample`, `GET /api/export`, `POST /api/data/clear`); sample data is built by `server/sampleData.js` (`buildSampleData()`, dates relative to today), and `npm run seed`/`reset` are CLI equivalents. A strict `POST /api/import` exists for restoring an exported backup via curl (validated by `isValidDB()`; 400 + DB untouched on bad shape) — it is intentionally **not** surfaced in the UI (no file-upload flow).
+- **Backend is Supabase** (Postgres), not a local server. `src/api.ts` creates the client from `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` and maps four tables (`parents`, `journal`, `followups`, `message_counts`) to/from the `DB` shape. `db/schema.sql` is the source of truth for tables + RLS. Watch the mapping seams: followups `parent_id` ⇄ `parentId`, and `message_counts` rows ⇄ the `messageCounts` object.
+- **Every api method does its write, then re-reads the whole DB** (`getState`) and resolves to it, so callers keep doing `setDb(await api.foo(...))`. App.tsx holds the one `db` and passes `db` + `setDb` to every component — no partial updates or client cache. The status-history append, `trial_start_date` auto-set, and message clamp logic live in `src/api.ts` (ported from the old server).
+- **Ships empty; data entry is in-app CRUD** — the "Add a parent" form, row ✎/✕ buttons, and click-to-advance status badge (Pipeline tab). Topbar: Load sample / Export backup / Clear all. No file-upload/import flow.
+- **`server/` is legacy** — the previous Express + `server/data.json` backend, no longer used by the app (kept for reference only).
 
 **Derived data is computed, never stored.** src/stats.ts derives everything the dashboard, follow-up queue, and patterns tab show, directly from the DB:
 - *Follow-up queue* is generated from rules, not stored as a todo list: trial check-ins surface at trial-day 3/7/14, and unanswered cold contacts surface "bump 1" at 4 days and "bump 2" at 10 days. Marking one done writes a `followup` record keyed `parentId:type`, which then filters that item out. Items sort by an urgency score.
@@ -39,4 +37,4 @@ There is no test runner and no linter — `npm run typecheck` is the only automa
 
 ## Product constraint: minimalism is intentional
 
-This tool is deliberately tiny. The owner has explicitly chosen *not* to build: authentication, charts/graphs, AI features, calendar or email integration, and mobile support. It is single-user and local by design (hence no auth). Treat scope creep as a regression — when in doubt, favor the five existing surfaces (dashboard/streak, pipeline table, follow-up queue, patterns, end-of-day journal) over adding new ones.
+Keep the *feature set* tiny — favor the existing surfaces (dashboard/streak, pipeline table, follow-up queue, patterns, end-of-day journal) over adding new ones; the owner originally ruled out charts/AI/calendar/email. **Note:** the earlier "local-only / no database / no mobile" rule no longer holds — as of 2026-05 the app is deployed (Supabase backend, usable on a phone). There is still **no login**: the anon RLS policies leave data open to anyone with the URL — a known follow-up if privacy is needed.

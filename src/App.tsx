@@ -31,12 +31,11 @@ export default function App() {
   if (error) {
     return (
       <div className="loading">
-        <p>Couldn’t reach the API server.</p>
+        <p>Couldn’t load your data.</p>
         <p className="muted">
-          This app isn’t a static site — it needs its Node server running. Locally run <code>npm run dev</code>;
-          when deployed, run <code>node server/index.js</code> (or <code>npm run preview</code>), which serves the
-          app and <code>/api</code> together on one port. A 404 here means the page loaded but nothing answers
-          <code>/api</code> at this URL — usually the frontend was deployed as static files with no backend.
+          This app stores data in Supabase. Check that it was built with your <code>VITE_SUPABASE_URL</code> and{' '}
+          <code>VITE_SUPABASE_ANON_KEY</code>, and that you ran the setup SQL (<code>db/schema.sql</code>) in your
+          Supabase project. Then reload.
         </p>
         <code>{error}</code>
       </div>

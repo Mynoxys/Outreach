@@ -61,3 +61,25 @@ create table if not exists checklist (
 );
 alter table checklist enable row level security;
 create policy "anon full access - checklist" on checklist for all to anon using (true) with check (true);
+
+-- Potential leads: people/sources you haven't contacted yet (a backlog).
+create table if not exists leads (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null default '',
+  source      text not null default '',
+  note        text not null default '',
+  created_at  timestamptz not null default now()
+);
+alter table leads enable row level security;
+create policy "anon full access - leads" on leads for all to anon using (true) with check (true);
+
+-- Reusable message templates (your editable outreach scripts).
+create table if not exists templates (
+  id          uuid primary key default gen_random_uuid(),
+  title       text not null default '',
+  body        text not null default '',
+  kind        text not null default '',
+  created_at  timestamptz not null default now()
+);
+alter table templates enable row level security;
+create policy "anon full access - templates" on templates for all to anon using (true) with check (true);

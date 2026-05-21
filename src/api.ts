@@ -1,7 +1,8 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import type { DB, FollowupType, JournalEntry, Parent, Status } from './types'
+import type { DB, FollowupType, JournalEntry, Lead, Parent, Status, Template } from './types'
 import { todayKey } from './dateUtils'
 import { buildSampleData } from './lib/sampleData'
+import { STARTER_TEMPLATES } from './lib/starterTemplates'
 
 // Supabase replaces the old Express + data.json backend so the app can deploy
 // as a static site (GitHub Pages / Vercel) and work from a phone. The URL +
@@ -33,12 +34,14 @@ type ChecklistRow = { date: string; task_key: string }
 // Read all tables and assemble the single DB object the UI works with.
 async function getState(): Promise<DB> {
   const c = client()
-  const [parents, journal, followups, counts, checklist] = await Promise.all([
+  const [parents, journal, followups, counts, checklist, leads, templates] = await Promise.all([
     c.from('parents').select('*'),
     c.from('journal').select('*'),
     c.from('followups').select('*'),
     c.from('message_counts').select('*'),
     c.from('checklist').select('*'),
+    c.from('leads').select('*'),
+    c.from('templates').select('*'),
   ])
   const error = parents.error || journal.error || followups.error || counts.error
   if (error) throw new Error(error.message)
@@ -46,7 +49,7 @@ async function getState(): Promise<DB> {
   const messageCounts: Record<string, number> = {}
   for (const r of (counts.data as CountRow[] | null) ?? []) messageCounts[r.date] = r.count
 
-  // checklist is optional: tolerate the table not existing yet (pre-migration)
+  // These tables are optional: tolerate them not existing yet (pre-migration)
   // so the rest of the app keeps working before the schema update is run.
   const checklistMarks = checklist.error
     ? []
@@ -63,6 +66,8 @@ async function getState(): Promise<DB> {
     })),
     messageCounts,
     checklist: checklistMarks,
+    leads: leads.error ? [] : ((leads.data as Lead[] | null) ?? []),
+    templates: templates.error ? [] : ((templates.data as Template[] | null) ?? []),
   }
 }
 
@@ -204,6 +209,91 @@ export const api = {
     return getState()
   },
 
+  // --- Leads (backlog of people not yet contacted) ---
+  addLead: async (lead: { name: string; source?: string; note?: string }): Promise<DB> => {
+    const { error } = await client().from('leads').insert({
+      id: crypto.randomUUID(),
+      name: lead.name ?? '',
+      source: lead.source ?? '',
+      note: lead.note ?? '',
+      created_at: nowISO(),
+    })
+    if (error) throw new Error(error.message)
+    return getState()
+  },
+
+  deleteLead: async (id: string): Promise<DB> => {
+    const { error } = await client().from('leads').delete().eq('id', id)
+    if (error) throw new Error(error.message)
+    return getState()
+  },
+
+  // Move a lead into the pipeline as a freshly cold-contacted parent.
+  promoteLead: async (id: string): Promise<DB> => {
+    const c = client()
+    const { data: lead, error: e1 } = await c.from('leads').select('*').eq('id', id).single()
+    if (e1) throw new Error(e1.message)
+    const now = nowISO()
+    const r1 = await c.from('parents').insert({
+      id: crypto.randomUUID(),
+      name: lead.name ?? '',
+      source: lead.source ?? '',
+      first_contact_date: todayKey(),
+      status: 'cold_sent',
+      trial_start_date: null,
+      notes: lead.note ?? '',
+      key_quote: '',
+      failure_moment_tag: '',
+      created_at: now,
+      updated_at: now,
+      status_history: [{ status: 'cold_sent', at: now }],
+    })
+    if (r1.error) throw new Error(r1.error.message)
+    const r2 = await c.from('leads').delete().eq('id', id)
+    if (r2.error) throw new Error(r2.error.message)
+    return getState()
+  },
+
+  // --- Message templates ---
+  addTemplate: async (t: { title: string; body: string; kind?: string }): Promise<DB> => {
+    const { error } = await client().from('templates').insert({
+      id: crypto.randomUUID(),
+      title: t.title ?? '',
+      body: t.body ?? '',
+      kind: t.kind ?? '',
+      created_at: nowISO(),
+    })
+    if (error) throw new Error(error.message)
+    return getState()
+  },
+
+  updateTemplate: async (id: string, patch: { title?: string; body?: string; kind?: string }): Promise<DB> => {
+    const update: Record<string, unknown> = {}
+    for (const f of ['title', 'body', 'kind'] as const) if (f in patch) update[f] = patch[f]
+    const { error } = await client().from('templates').update(update).eq('id', id)
+    if (error) throw new Error(error.message)
+    return getState()
+  },
+
+  deleteTemplate: async (id: string): Promise<DB> => {
+    const { error } = await client().from('templates').delete().eq('id', id)
+    if (error) throw new Error(error.message)
+    return getState()
+  },
+
+  loadStarterTemplates: async (): Promise<DB> => {
+    const rows = STARTER_TEMPLATES.map((t) => ({
+      id: crypto.randomUUID(),
+      title: t.title,
+      body: t.body,
+      kind: t.kind,
+      created_at: nowISO(),
+    }))
+    const { error } = await client().from('templates').insert(rows)
+    if (error) throw new Error(error.message)
+    return getState()
+  },
+
   clearData: async (): Promise<DB> => {
     const c = client()
     // delete-all requires a filter; id/date is never null, so this matches every row.
@@ -216,6 +306,8 @@ export const api = {
     const r4 = await c.from('parents').delete().not('id', 'is', null)
     if (r4.error) throw new Error(r4.error.message)
     await c.from('checklist').delete().not('date', 'is', null) // ignore error: table may not exist yet
+    await c.from('leads').delete().not('id', 'is', null) // ignore error: table may not exist yet
+    await c.from('templates').delete().not('id', 'is', null) // ignore error: table may not exist yet
     return getState()
   },
 
@@ -240,6 +332,14 @@ export const api = {
     const countRows = Object.entries(sample.messageCounts).map(([date, count]) => ({ date, count }))
     if (countRows.length) {
       const { error } = await c.from('message_counts').insert(countRows)
+      if (error) throw new Error(error.message)
+    }
+    if (sample.leads.length) {
+      const { error } = await c.from('leads').insert(sample.leads)
+      if (error) throw new Error(error.message)
+    }
+    if (sample.templates.length) {
+      const { error } = await c.from('templates').insert(sample.templates)
       if (error) throw new Error(error.message)
     }
     return getState()

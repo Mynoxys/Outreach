@@ -1,5 +1,6 @@
 import type { DB, Parent } from '../types'
 import { todayKey } from '../dateUtils'
+import { STARTER_TEMPLATES } from './starterTemplates'
 
 // Realistic demo data so "Load sample" shows every feature populated.
 // Dates are relative to now, so the streak and follow-up queue are always fresh.
@@ -178,5 +179,18 @@ export function buildSampleData(): DB {
     },
   ]
 
-  return { parents, journal, messageCounts, followups, checklist: [] }
+  const leads = [
+    { id: crypto.randomUUID(), name: 'Taylor Brooks', source: 'r/Parenting — “5 more minutes” thread', note: 'Posted today, very engaged. Hot — reply first.', created_at: at(0, 8) },
+    { id: crypto.randomUUID(), name: 'Morgan Diaz', source: 'FB: Screen-Free Parenting', note: 'Comments a lot about tween phone limits.', created_at: at(-1, 8) },
+    { id: crypto.randomUUID(), name: 'The Calm Mom (newsletter)', source: 'Substack — ~12k parents', note: 'Channel, not a parent — park for Week 3.', created_at: at(-2, 8) },
+  ]
+  const templates = STARTER_TEMPLATES.map((t) => ({
+    id: crypto.randomUUID(),
+    title: t.title,
+    body: t.body,
+    kind: t.kind,
+    created_at: at(-3, 8),
+  }))
+
+  return { parents, journal, messageCounts, followups, checklist: [], leads, templates }
 }

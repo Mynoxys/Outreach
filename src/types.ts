@@ -57,12 +57,32 @@ export interface ChecklistMark {
   taskKey: string
 }
 
+// A potential lead you haven't contacted yet (backlog before the pipeline).
+export interface Lead {
+  id: string
+  name: string
+  source: string
+  note: string
+  created_at: string
+}
+
+// A reusable outreach message you can edit and copy.
+export interface Template {
+  id: string
+  title: string
+  body: string
+  kind: string
+  created_at: string
+}
+
 export interface DB {
   parents: Parent[]
   journal: JournalEntry[]
   messageCounts: Record<string, number>
   followups: Followup[]
   checklist: ChecklistMark[]
+  leads: Lead[]
+  templates: Template[]
 }
 
 // --- Status metadata ---

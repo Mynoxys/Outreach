@@ -3,13 +3,15 @@ import type { DB } from './types'
 import { api } from './api'
 import Dashboard from './components/Dashboard'
 import PlanTab from './components/PlanTab'
+import LeadsTab from './components/LeadsTab'
 import FollowUpQueue from './components/FollowUpQueue'
 import ParentsTable from './components/ParentsTable'
+import MessagesTab from './components/MessagesTab'
 import PatternsTab from './components/PatternsTab'
 import JournalTab from './components/JournalTab'
 import EndDayModal from './components/EndDayModal'
 
-type Tab = 'plan' | 'pipeline' | 'patterns' | 'journal'
+type Tab = 'plan' | 'leads' | 'pipeline' | 'templates' | 'patterns' | 'journal'
 
 function downloadExport() {
   const a = document.createElement('a')
@@ -81,7 +83,9 @@ export default function App() {
 
         <nav className="tabs">
           <button className={'tab' + (tab === 'plan' ? ' active' : '')} onClick={() => setTab('plan')}>Plan</button>
+          <button className={'tab' + (tab === 'leads' ? ' active' : '')} onClick={() => setTab('leads')}>Leads</button>
           <button className={'tab' + (tab === 'pipeline' ? ' active' : '')} onClick={() => setTab('pipeline')}>Pipeline</button>
+          <button className={'tab' + (tab === 'templates' ? ' active' : '')} onClick={() => setTab('templates')}>Templates</button>
           <button className={'tab' + (tab === 'patterns' ? ' active' : '')} onClick={() => setTab('patterns')}>Patterns</button>
           <button className={'tab' + (tab === 'journal' ? ' active' : '')} onClick={() => setTab('journal')}>Journal</button>
         </nav>
@@ -89,12 +93,14 @@ export default function App() {
 
       <main className="content">
         {tab === 'plan' && <PlanTab db={db} setDb={setDb} />}
+        {tab === 'leads' && <LeadsTab db={db} setDb={setDb} />}
         {tab === 'pipeline' && (
           <>
             <FollowUpQueue db={db} setDb={setDb} />
             <ParentsTable db={db} setDb={setDb} />
           </>
         )}
+        {tab === 'templates' && <MessagesTab db={db} setDb={setDb} />}
         {tab === 'patterns' && <PatternsTab db={db} />}
         {tab === 'journal' && <JournalTab db={db} />}
       </main>

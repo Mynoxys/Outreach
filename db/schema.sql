@@ -52,3 +52,12 @@ create policy "anon full access - parents"        on parents        for all to a
 create policy "anon full access - journal"         on journal         for all to anon using (true) with check (true);
 create policy "anon full access - followups"       on followups       for all to anon using (true) with check (true);
 create policy "anon full access - message_counts"  on message_counts  for all to anon using (true) with check (true);
+
+-- Per-day routine checklist: which sprint tasks you ticked off on a given date.
+create table if not exists checklist (
+  date      text not null,
+  task_key  text not null,
+  primary key (date, task_key)
+);
+alter table checklist enable row level security;
+create policy "anon full access - checklist" on checklist for all to anon using (true) with check (true);

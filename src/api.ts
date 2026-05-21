@@ -28,21 +28,29 @@ const nowISO = () => new Date().toISOString()
 
 type FollowupRow = { id: string; parent_id: string; type: FollowupType; date: string }
 type CountRow = { date: string; count: number }
+type ChecklistRow = { date: string; task_key: string }
 
-// Read all four tables and assemble the single DB object the UI works with.
+// Read all tables and assemble the single DB object the UI works with.
 async function getState(): Promise<DB> {
   const c = client()
-  const [parents, journal, followups, counts] = await Promise.all([
+  const [parents, journal, followups, counts, checklist] = await Promise.all([
     c.from('parents').select('*'),
     c.from('journal').select('*'),
     c.from('followups').select('*'),
     c.from('message_counts').select('*'),
+    c.from('checklist').select('*'),
   ])
   const error = parents.error || journal.error || followups.error || counts.error
   if (error) throw new Error(error.message)
 
   const messageCounts: Record<string, number> = {}
   for (const r of (counts.data as CountRow[] | null) ?? []) messageCounts[r.date] = r.count
+
+  // checklist is optional: tolerate the table not existing yet (pre-migration)
+  // so the rest of the app keeps working before the schema update is run.
+  const checklistMarks = checklist.error
+    ? []
+    : ((checklist.data as ChecklistRow[] | null) ?? []).map((r) => ({ date: r.date, taskKey: r.task_key }))
 
   return {
     parents: (parents.data ?? []) as Parent[],
@@ -54,6 +62,7 @@ async function getState(): Promise<DB> {
       date: f.date,
     })),
     messageCounts,
+    checklist: checklistMarks,
   }
 }
 
@@ -182,6 +191,19 @@ export const api = {
     return getState()
   },
 
+  // Tick / untick a routine task for a given day.
+  toggleTask: async (date: string, taskKey: string, done: boolean): Promise<DB> => {
+    const c = client()
+    if (done) {
+      const { error } = await c.from('checklist').upsert({ date, task_key: taskKey })
+      if (error) throw new Error(error.message)
+    } else {
+      const { error } = await c.from('checklist').delete().eq('date', date).eq('task_key', taskKey)
+      if (error) throw new Error(error.message)
+    }
+    return getState()
+  },
+
   clearData: async (): Promise<DB> => {
     const c = client()
     // delete-all requires a filter; id/date is never null, so this matches every row.
@@ -193,6 +215,7 @@ export const api = {
     if (r3.error) throw new Error(r3.error.message)
     const r4 = await c.from('parents').delete().not('id', 'is', null)
     if (r4.error) throw new Error(r4.error.message)
+    await c.from('checklist').delete().not('date', 'is', null) // ignore error: table may not exist yet
     return getState()
   },
 

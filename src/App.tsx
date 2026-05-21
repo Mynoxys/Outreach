@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react'
 import type { DB } from './types'
 import { api } from './api'
 import Dashboard from './components/Dashboard'
+import PlanTab from './components/PlanTab'
 import FollowUpQueue from './components/FollowUpQueue'
 import ParentsTable from './components/ParentsTable'
 import PatternsTab from './components/PatternsTab'
 import JournalTab from './components/JournalTab'
 import EndDayModal from './components/EndDayModal'
 
-type Tab = 'pipeline' | 'patterns' | 'journal'
+type Tab = 'plan' | 'pipeline' | 'patterns' | 'journal'
 
 function downloadExport() {
   const a = document.createElement('a')
@@ -20,7 +21,7 @@ function downloadExport() {
 
 export default function App() {
   const [db, setDb] = useState<DB | null>(null)
-  const [tab, setTab] = useState<Tab>('pipeline')
+  const [tab, setTab] = useState<Tab>('plan')
   const [endDayOpen, setEndDayOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -79,6 +80,7 @@ export default function App() {
         <Dashboard db={db} setDb={setDb} />
 
         <nav className="tabs">
+          <button className={'tab' + (tab === 'plan' ? ' active' : '')} onClick={() => setTab('plan')}>Plan</button>
           <button className={'tab' + (tab === 'pipeline' ? ' active' : '')} onClick={() => setTab('pipeline')}>Pipeline</button>
           <button className={'tab' + (tab === 'patterns' ? ' active' : '')} onClick={() => setTab('patterns')}>Patterns</button>
           <button className={'tab' + (tab === 'journal' ? ' active' : '')} onClick={() => setTab('journal')}>Journal</button>
@@ -86,6 +88,7 @@ export default function App() {
       </div>
 
       <main className="content">
+        {tab === 'plan' && <PlanTab db={db} setDb={setDb} />}
         {tab === 'pipeline' && (
           <>
             <FollowUpQueue db={db} setDb={setDb} />

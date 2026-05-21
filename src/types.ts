@@ -51,11 +51,18 @@ export interface Followup {
   date: string // YYYY-MM-DD the follow-up was done
 }
 
+// A ticked routine task: this task_key was completed on this date.
+export interface ChecklistMark {
+  date: string // YYYY-MM-DD
+  taskKey: string
+}
+
 export interface DB {
   parents: Parent[]
   journal: JournalEntry[]
   messageCounts: Record<string, number>
   followups: Followup[]
+  checklist: ChecklistMark[]
 }
 
 // --- Status metadata ---
@@ -97,4 +104,15 @@ export const TARGETS = {
   conversationsPerDayMax: 3,
   conversationsPerWeek: 12,
   trialsGoal: 30,
+}
+
+// The locked-in sprint math (working backwards from 30 completed trials).
+export const SPRINT = {
+  goalDate: '2026-08-22', // 30 completed 14-day trials by here
+  preInternDate: '2026-07-07', // solo phase ends; interns join
+  trialsGoal: 30,
+  trialsStartedGoal: 60, // ~50% of started trials complete
+  conversationsGoal: 240, // ~25% of conversations convert to a trial
+  messagesPerDay: 10,
+  conversationsPerDay: 3,
 }

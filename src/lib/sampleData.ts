@@ -178,5 +178,5 @@ export function buildSampleData(): DB {
     },
   ]
 
-  return { parents, journal, messageCounts, followups }
+  return { parents, journal, messageCounts, followups, checklist: [] }
 }

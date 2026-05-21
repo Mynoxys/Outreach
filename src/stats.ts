@@ -1,12 +1,15 @@
 import type { DB, FollowupType, Parent } from './types'
+import { SPRINT } from './types'
 import {
   addDays,
   daysBetween,
   isWeekend,
   isoToKey,
+  parseKey,
   todayKey,
   weekStartKey,
 } from './dateUtils'
+import { playbookForDate } from './lib/playbook'
 
 // --- Dashboard ---
 
@@ -215,4 +218,107 @@ function reachedTrial(p: Parent): boolean {
 export function trialDay(p: Parent, now: Date = new Date()): number | null {
   if (!p.trial_start_date) return null
   return daysBetween(p.trial_start_date, todayKey(now))
+}
+
+// --- Daily plan (routine checklist) ---
+
+export interface ResolvedTask {
+  key: string
+  label: string
+  detail?: string
+  done: boolean
+  auto: boolean
+  progress?: string // e.g. "8/10" for auto (number-tied) tasks
+}
+export interface ResolvedSection {
+  name: string
+  note?: string
+  tasks: ResolvedTask[]
+}
+export interface ResolvedDay {
+  kind: 'weekday' | 'saturday' | 'sunday'
+  title: string
+  sections: ResolvedSection[]
+  done: number
+  total: number
+  complete: boolean
+}
+
+// Resolve a date's routine into concrete done/not-done tasks. Auto tasks read
+// from data the app already tracks; manual tasks read from the checklist marks.
+export function resolveDay(db: DB, dateKey: string): ResolvedDay {
+  const pb = playbookForDate(dateKey)
+  const marks = new Set(db.checklist.filter((m) => m.date === dateKey).map((m) => m.taskKey))
+  const msgs = db.messageCounts[dateKey] || 0
+  const convos = conversationsBetween(db, dateKey, dateKey)
+
+  let done = 0
+  let total = 0
+  const sections: ResolvedSection[] = pb.sections.map((s) => ({
+    name: s.name,
+    note: s.note,
+    tasks: s.tasks.map((t) => {
+      total++
+      let isDone: boolean
+      let progress: string | undefined
+      if (t.auto === 'messages') {
+        isDone = msgs >= SPRINT.messagesPerDay
+        progress = `${msgs}/${SPRINT.messagesPerDay}`
+      } else if (t.auto === 'conversations') {
+        isDone = convos >= SPRINT.conversationsPerDay
+        progress = `${convos}/${SPRINT.conversationsPerDay}`
+      } else {
+        isDone = marks.has(t.key)
+      }
+      if (isDone) done++
+      return { key: t.key, label: t.label, detail: t.detail, done: isDone, auto: !!t.auto, progress }
+    }),
+  }))
+
+  const complete = pb.kind === 'saturday' ? true : total > 0 && done === total
+  return { kind: pb.kind, title: pb.title, sections, done, total, complete }
+}
+
+// --- Sprint scoreboard (the funnel, working backward from 30 trials) ---
+
+export interface SprintStats {
+  conversations: number
+  trialsStarted: number
+  trialsActive: number
+  trialsCompleted: number
+  weekdaysLeft: number
+}
+
+export function sprintStats(db: DB, now: Date = new Date()): SprintStats {
+  let conversations = 0
+  let trialsStarted = 0
+  let trialsActive = 0
+  let trialsCompleted = 0
+  for (const p of db.parents) {
+    if (p.status_history.some((e) => e.status === 'interviewed')) conversations++
+    if (reachedTrial(p)) trialsStarted++
+    if (p.status === 'trial_started' || p.status === 'trial_active') trialsActive++
+    if (p.status === 'trial_completed') trialsCompleted++
+  }
+  return {
+    conversations,
+    trialsStarted,
+    trialsActive,
+    trialsCompleted,
+    weekdaysLeft: weekdaysUntil(SPRINT.goalDate, now),
+  }
+}
+
+// Count weekdays (Mon–Fri) from today through the goal date, inclusive.
+function weekdaysUntil(goalKey: string, now: Date): number {
+  const today = todayKey(now)
+  if (goalKey < today) return 0
+  let n = 0
+  let cursor = parseKey(today)
+  const end = parseKey(goalKey).getTime()
+  for (let guard = 0; guard < 1000 && cursor.getTime() <= end; guard++) {
+    if (!isWeekend(cursor)) n++
+    cursor = addDays(cursor, 1)
+  }
+  return n
 }
